@@ -1,4 +1,5 @@
 import time
+import re
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
@@ -38,6 +39,9 @@ class AmazonBridge(BaseBridge):
         )  # noqa: E501
 
     def __force_page_contents_load(self):
+
+        # Scrolls over the entirety of the page,
+        # revealing all possible carousels
         self.driver.execute_script(
             """
             window.scrollTo({
@@ -46,28 +50,59 @@ class AmazonBridge(BaseBridge):
                 behavior: 'smooth'
             });"""
         )
-        time.sleep(2)
-        self.driver.execute_script(
-            """
-            window.scrollTo({
-                top: document.body.scrollHeight,
-                left: 0,
-                behavior: 'smooth'
-            });"""
-        )
-        time.sleep(1)
-        self.driver.execute_script(
-            "document.querySelectorAll('.a-carousel-goto-nextpage').forEach(e => e.click())"
-        )
-        time.sleep(1)
-        self.driver.execute_script(
-            "document.querySelectorAll('.a-carousel-goto-nextpage').forEach(e => e.click())"
-        )
-        time.sleep(1)
-        self.driver.execute_script(
-            "document.querySelectorAll('.a-carousel-goto-nextpage').forEach(e => e.click())"
-        )
-        time.sleep(1)
+        # time.sleep(2)
+        # self.driver.execute_script(
+        #     """
+        #     window.scrollTo({
+        #         top: document.body.scrollHeight,
+        #         left: 0,
+        #         behavior: 'smooth'
+        #     });"""
+        # )
+        # time.sleep(1)
+        # self.driver.execute_script(
+        #     "document.querySelectorAll('.a-carousel-goto-nextpage').forEach(e => e.click())"
+        # )
+        # time.sleep(1)
+        # self.driver.execute_script(
+        #     "document.querySelectorAll('.a-carousel-goto-nextpage').forEach(e => e.click())"
+        # )
+        # time.sleep(1)
+        # self.driver.execute_script(
+        #     "document.querySelectorAll('.a-carousel-goto-nextpage').forEach(e => e.click())"
+        # )
+        # time.sleep(1)
+
+    def __scrape_product_details(self):
+
+        # Product id
+        url = self.driver.current_url
+        product_id = re.search(".*/dp/(\d+)/.*", url).group(1)
+
+        # Product name
+        product_name = self.driver.find_element_by_css_selector("span#productTitle").text
+
+        # Product authors
+        product_authors = self.driver.find_elements_by_css_selector("a.authorNameLink")
+        product_authors = [author.text for author in product_authors]
+
+
+        # Book description
+        frame = self.driver.find_element_by_css_selector("#bookDesc_iframe")
+        self.driver.switch_to.frame(frame) # We have to enter the iFrame
+        desc = self.driver.find_elements_by_css_selector("#iframeContent > *")
+        product_description = "\n".join([item.text for item in desc])
+
+        # Gets price details
+
+        data = {
+            "product_id": product_id,
+            "product_description": product_description,
+            "product_name": product_name,
+            "product_authors": product_authors,
+        }
+
+        return data
 
     def __scrape_suggested_products(self):
         return self.driver.execute_async_script(
@@ -200,9 +235,9 @@ class AmazonBridge(BaseBridge):
         else:
             return {
                 "page_type": "product",
-                "title": self.driver.find_element_by_css_selector("h1").text,
-                "recommendations": self.__scrape_suggested_products(),
-                "carousels": self.__scrape_raw_carousel_data()
+                "details": self.__scrape_product_details(),
+                #"recommendations": self.__scrape_suggested_products(),
+                #"carousels": self.__scrape_raw_carousel_data()
             }
 
     def run(self, url):
@@ -218,7 +253,6 @@ class AmazonBridge(BaseBridge):
             self.driver.get(
                 f"https://smile.amazon.com/s?k={quote_plus(parsed.query)}"
             )
-
         elif parsed.path == "search_in_category":
             elements = parsed.query.split(":")
             category = elements[0]
