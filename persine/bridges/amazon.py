@@ -55,10 +55,6 @@ class AmazonBridge(BaseBridge):
                 behavior: 'smooth'
             });"""
         )
-        time.sleep(2)
-        self.driver.execute_script(
-            "document.querySelectorAll('.a-carousel-goto-nextpage').forEach(e => e.click())"
-        )
         time.sleep(1)
         self.driver.execute_script(
             "document.querySelectorAll('.a-carousel-goto-nextpage').forEach(e => e.click())"
@@ -67,7 +63,11 @@ class AmazonBridge(BaseBridge):
         self.driver.execute_script(
             "document.querySelectorAll('.a-carousel-goto-nextpage').forEach(e => e.click())"
         )
-        time.sleep(2)
+        time.sleep(1)
+        self.driver.execute_script(
+            "document.querySelectorAll('.a-carousel-goto-nextpage').forEach(e => e.click())"
+        )
+        time.sleep(1)
 
     def __scrape_suggested_products(self):
         return self.driver.execute_async_script(
@@ -210,11 +210,21 @@ class AmazonBridge(BaseBridge):
 
         if parsed.scheme in ["http", "https"]:
             self.driver.get(url)
+
         elif parsed.path == "homepage":
             self.driver.get("https://www.amazon.com/")
+
         elif parsed.path == "search":
             self.driver.get(
                 f"https://smile.amazon.com/s?k={quote_plus(parsed.query)}"
+            )
+
+        elif parsed.path == "search_in_category":
+            elements = parsed.query.split(":")
+            category = elements[0]
+            search_query = elements[1]
+            self.driver.get(
+                f"https://smile.amazon.com/s?k={quote_plus(search_query)}&i={category}"
             )
 
         self.__force_page_contents_load()
