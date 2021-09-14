@@ -125,10 +125,74 @@ class AmazonBridge(BaseBridge):
 
 
         def scrape_product_details(driver):
-            #todo
-            pass
+            
+            div = driver.find_element_by_css_selector("div#detailBullets_feature_div")
+            labels = div.find_elements_by_css_selector("span.a-text-bold")
+            
+            values = []
+
+            for label in labels:
+
+                label_text = label.text.replace(":","").strip() 
+
+                parent = label.find_element_by_xpath("..") # xpath for parent
+                siblings = parent.find_elements_by_css_selector("*") # all children of parent
+
+                if label_text not in ["Customer Reviews", "Best Sellers Rank"]:
+                    assert len(siblings) == 2
+                    value = siblings[1] # First sibling is the label, second is the value
+                    values.append(value.text.replace(":","").strip())
+
+                else:               
+
+                    if label_text == "Best Sellers Rank":
+
+                        value = {}
+
+                        # General ranking (if any):
+                        string = parent.text.split(":")[1]
+                        match = re.search("#(\d+) in (.*) \(.*", string)
+                        position = match.group(1).strip()
+                        category = match.group(2).strip()
+
+                        value[category] = position
+
+                        # Category specific rankings
+                        rankings = parent.find_elements_by_css_selector("li")
+
+                        for ranking in rankings:
+
+                            match = re.search("#(\d+) in (.*)", ranking.text)
+                            position = match.group(1).strip()
+                            category = match.group(2).strip()
+
+                            value[category] = position
+
+                        values.append(value)
+
+                    elif label_text == "Customer Reviews":
+
+                        value = {}
+
+                        average = parent.find_element_by_css_selector("#acrPopover").get_attribute("title")
+                        count = parent.find_element_by_css_selector("#acrCustomerReviewText").text
+
+                        value["average"] = average
+                        value["count"] = count
+
+                        values.append(value)
+
+
+
+
+
+                
+            labels = [label.text.replace(":","").strip() for label in labels]
+            #values = [value.text.replace(":","").strip() for value in values]
+            print(dict(zip(labels, values)))
 
         driver = self.driver
+        scrape_product_details(driver)
 
         data = {
             "product_id": scrape_product_id(driver),
