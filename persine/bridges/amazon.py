@@ -1,5 +1,6 @@
 import time
 import re
+from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
@@ -73,33 +74,69 @@ class AmazonBridge(BaseBridge):
         # )
         # time.sleep(1)
 
-    def __scrape_product_details(self):
+    def __scrape_product_info(self):
 
-        # Product id
-        url = self.driver.current_url
-        product_id = re.search(".*/dp/(\d+)/.*", url).group(1)
-
-        # Product name
-        product_name = self.driver.find_element_by_css_selector("span#productTitle").text
-
-        # Product authors
-        product_authors = self.driver.find_elements_by_css_selector("a.authorNameLink")
-        product_authors = [author.text for author in product_authors]
+        def scrape_product_category(driver):
+            div = driver.find_element_by_css_selector("#wayfinding-breadcrumbs_container")
+            nav = div.find_element_by_css_selector(".a-unordered-list")
+            categories = nav.find_elements_by_css_selector(".a-link-normal")
+            categories = [category.text for category in categories]
+            return dict(enumerate(categories))
 
 
-        # Book description
-        frame = self.driver.find_element_by_css_selector("#bookDesc_iframe")
-        self.driver.switch_to.frame(frame) # We have to enter the iFrame
-        desc = self.driver.find_elements_by_css_selector("#iframeContent > *")
-        product_description = "\n".join([item.text for item in desc])
+        def scrape_product_id(driver):
+            url = driver.current_url
+            product_id = re.search(".*/dp/(\d+)/.*", url).group(1)
+            return product_id
 
-        # Gets price details
+
+        def scrape_product_name(driver):
+            return driver.find_element_by_css_selector("span#productTitle").text
+
+        
+        def scrape_product_authors(driver):
+            product_authors = driver.find_elements_by_css_selector("a.authorNameLink")
+            product_authors = [author.text for author in product_authors]
+            return product_authors
+
+
+        def scrape_product_prices(driver):
+            div_formats = driver.find_element_by_css_selector("div#formats")
+            format_buttons = div_formats.find_elements_by_css_selector("span.a-button")
+            formats = [ 
+                button.find_element_by_css_selector("a.a-button-text > span").text 
+                for button in format_buttons
+            ]
+            prices = [ 
+                       button.find_element_by_css_selector("span.a-color-price").text 
+                       if 'a-button-selected' in button.get_attribute('class').split()
+                       else button.find_element_by_css_selector("span.a-color-secondary").text
+                       for button in format_buttons
+            ]
+            return (dict(zip(formats, prices)))
+
+
+        def scrape_product_description(driver):
+            frame = self.driver.find_element_by_css_selector("#bookDesc_iframe")
+            self.driver.switch_to.frame(frame) # We have to enter the iFrame
+            desc = self.driver.find_elements_by_css_selector("#iframeContent > *")
+            product_description = "\n".join([item.text for item in desc])
+            self.driver.switch_to.default_content() # Leave iframe
+
+
+        def scrape_product_details(driver):
+            #todo
+            pass
+
+        driver = self.driver
 
         data = {
-            "product_id": product_id,
-            "product_description": product_description,
-            "product_name": product_name,
-            "product_authors": product_authors,
+            "product_id": scrape_product_id(driver),
+            "product_description": scrape_product_description(driver),
+            "product_name": scrape_product_name(driver),
+            "product_authors": scrape_product_authors(driver),
+            "producy_price": scrape_product_prices(driver),
+            "product_categories": scrape_product_category(driver)
         }
 
         return data
@@ -235,7 +272,7 @@ class AmazonBridge(BaseBridge):
         else:
             return {
                 "page_type": "product",
-                "details": self.__scrape_product_details(),
+                "product_info": self.__scrape_product_info(),
                 #"recommendations": self.__scrape_suggested_products(),
                 #"carousels": self.__scrape_raw_carousel_data()
             }
@@ -253,6 +290,7 @@ class AmazonBridge(BaseBridge):
             self.driver.get(
                 f"https://smile.amazon.com/s?k={quote_plus(parsed.query)}"
             )
+
         elif parsed.path == "search_in_category":
             elements = parsed.query.split(":")
             category = elements[0]
