@@ -181,26 +181,21 @@ class AmazonBridge(BaseBridge):
                         value["count"] = count
 
                         values.append(value)
-
-
-
-
-
-                
+  
             labels = [label.text.replace(":","").strip() for label in labels]
-            #values = [value.text.replace(":","").strip() for value in values]
-            print(dict(zip(labels, values)))
+
+            return dict(zip(labels, values))
 
         driver = self.driver
-        scrape_product_details(driver)
-
+        
         data = {
             "product_id": scrape_product_id(driver),
             "product_description": scrape_product_description(driver),
             "product_name": scrape_product_name(driver),
             "product_authors": scrape_product_authors(driver),
             "producy_price": scrape_product_prices(driver),
-            "product_categories": scrape_product_category(driver)
+            "product_categories": scrape_product_category(driver),
+            "product_details": scrape_product_details(driver)
         }
 
         return data
