@@ -59,7 +59,7 @@ class AmazonBridge(BaseBridge):
                 try { data['img'] = d.querySelector('img')['src']; } catch(err) {}
                 try { section.querySelector("h2 .sp_desktop_sponsored_label").remove() } catch(err) {}
                 try { section.querySelector("h2 a").remove() } catch(err) {}
-                try { data['section_title'] = section.querySelector("h2").innerText; } catch(err) {}
+                try { data['section_title'] = section.querySelector(".a-carousel-heading").innerText; } catch(err) {}
                 try { data['is_sponsored'] = section.innerText.indexOf("Sponsored") != -1 } catch(err) {}
                 try { data['stars'] = d.querySelector('[title*="out of 5 stars"]').title; } catch(err) {}
                 try { data['review_count'] = d.querySelector('[[title*="out of 5 stars"] .a-size-small').innerText; } catch(err) {}
@@ -79,10 +79,11 @@ class AmazonBridge(BaseBridge):
                 return data;    
             }
 
-            function getCarouselCurrentContents(root) {
-                return [...root.querySelectorAll(".a-carousel-card:not(.vse-video-card)")].map((d, i) => {
+            function getCarouselCurrentContents(root, step) {
+                return [...root.querySelectorAll(".a-carousel-card:not(.vse-video-card)[aria-hidden='false']")].map((d, i) => {
                     let data = getItemDetails(d)
                     data['index'] = i;
+                    data['pagination'] = step;
                     return data; 
                 });
             }
@@ -96,7 +97,7 @@ class AmazonBridge(BaseBridge):
                     return Promise.resolve([])
                 }
                 return new Promise((resolve, reject) => {
-                    let contents = getCarouselCurrentContents(root)
+                    let contents = getCarouselCurrentContents(root, step)
                     let firstVisible = parseFloat(root.querySelector(".a-carousel-firstvisibleitem").value)
                     firstVisible = firstVisible == "" ? 1 : parseInt(firstVisible)
                     if(firstVisible != 1 || step == 0) {
@@ -104,11 +105,9 @@ class AmazonBridge(BaseBridge):
                         root.scrollIntoView()
                         root.querySelector(".a-carousel-goto-nextpage").click()
 
-                        let tries = 0;
                         let waitUntilReady = setInterval(function() {
-                            //let isBusy = root.querySelector(".a-carousel").ariaBusy;
-                            let isLoaded = root.querySelectorAll(".a-carousel-card-empty").length == 0;
-                            //console.log("isBusy?", isBusy);
+                            let emptyCarouselCards = root.querySelectorAll(".a-carousel-card-empty[aria-hidden='false']")
+                            let isLoaded = emptyCarouselCards.length == 0;
                             console.log("isLoaded?", isLoaded);
                             if (isLoaded) {
                                 console.log("scraping carrousel", root);
@@ -118,16 +117,6 @@ class AmazonBridge(BaseBridge):
                                         resolve([...contents, ...nextPageContents]);
                                     })
                             } 
-                            else if (tries > 10) {
-                                
-                                // Remove empty cards
-                                console.log('Removed unload elements after considerable wait');
-                                toRemove = root.querySelectorAll(".a-carousel-card-empty");
-
-                                for (let item of toRemove) {
-                                    item.remove();
-                                }
-                            }
                             else {
                                 console.log("working");
                                 tries += 1;
@@ -185,31 +174,14 @@ class AmazonBridge(BaseBridge):
                 top: document.body.scrollHeight,
                 left: 0,
                 behavior: 'smooth'
-            });"""
+            });
 
-            # time.sleep(2)
-            # self.driver.execute_script(
-            #     """
-            #     window.scrollTo({
-            #         top: document.body.scrollHeight,
-            #         left: 0,
-            #         behavior: 'smooth'
-            #     });"""
-            # )
-            # time.sleep(1)
-            # self.driver.execute_script(
-            #     "document.querySelectorAll('.a-carousel-goto-nextpage').forEach(e => e.click())"
-            # )
-            # time.sleep(1)
-            # self.driver.execute_script(
-            #     "document.querySelectorAll('.a-carousel-goto-nextpage').forEach(e => e.click())"
-            # )
-            # time.sleep(1)
-            # self.driver.execute_script(
-            #     "document.querySelectorAll('.a-carousel-goto-nextpage').forEach(e => e.click())"
-            # )
-    # time.sleep(1)
+            """
+
         )
+
+
+
 
 
     def __scrape_product_info(self):
@@ -286,7 +258,10 @@ class AmazonBridge(BaseBridge):
                 except NoSuchElementException: 
                     formats = driver.find_element_by_css_selector("ul#mediaTabs_tabSet")
 
-                selected = formats.find_element_by_css_selector(".selected")
+                try:
+                    selected = formats.find_element_by_css_selector(".selected")
+                except NoSuchElementException:
+                    selected = formats.find_element_by_css_selector(".a-active")
 
                 if selected.find_elements_by_css_selector('.audible_mm_title'):
                     return True
