@@ -224,7 +224,7 @@ class AmazonBridge(BaseBridge):
 
         def scrape_product_id(driver):
             url = driver.current_url
-            product_id = re.search(".*/dp/(\d+)/.*", url).group(1)
+            product_id = re.search(".*/dp/([\w\d]+)/.*", url).group(1)
             return product_id
 
 
@@ -239,18 +239,34 @@ class AmazonBridge(BaseBridge):
 
 
         def scrape_product_prices(driver):
-            div_formats = driver.find_element_by_css_selector("div#formats")
-            format_buttons = div_formats.find_elements_by_css_selector("span.a-button")
-            formats = [ 
-                button.find_element_by_css_selector("a.a-button-text > span").text 
-                for button in format_buttons
-            ]
-            prices = [ 
-                       button.find_element_by_css_selector("span.a-color-price").text 
-                       if 'a-button-selected' in button.get_attribute('class').split()
-                       else button.find_element_by_css_selector("span.a-color-secondary").text
-                       for button in format_buttons
-            ]
+            try:
+                div_formats = driver.find_element_by_css_selector("div#formats")
+                format_buttons = div_formats.find_elements_by_css_selector("span.a-button")
+                formats = [ 
+                    button.find_element_by_css_selector("a.a-button-text > span").text 
+                    for button in format_buttons
+                ]
+                prices = [ 
+                           button.find_element_by_css_selector("span.a-color-price").text 
+                           if 'a-button-selected' in button.get_attribute('class').split()
+                           else button.find_element_by_css_selector("span.a-color-secondary").text
+                           for button in format_buttons
+                ]
+            
+            except NoSuchElementException: 
+                # Format for pre-order items
+                ul_formats = driver.find_element_by_css_selector("ul#mediaTabs_tabSet")
+                format_tabs = ul_formats.find_elements_by_css_selector(".mediaTab_heading:not(.otherSellers)")
+                formats = [
+                    tab.find_element_by_css_selector("span.mediaTab_title").text 
+                    for tab in format_tabs
+                ]
+                prices = [
+                    tab.find_element_by_css_selector("span.mediaTab_subtitle").text 
+                    for tab in format_tabs
+                ]
+
+
             return (dict(zip(formats, prices)))
 
 
@@ -263,67 +279,130 @@ class AmazonBridge(BaseBridge):
 
 
         def scrape_product_details(driver):
-            
-            div = driver.find_element_by_css_selector("div#detailBullets_feature_div")
-            labels = div.find_elements_by_css_selector("span.a-text-bold")
-            
-            values = []
 
-            for label in labels:
+            def is_audiobook(driver):
+                try:
+                    formats = driver.find_element_by_css_selector("div#formats")
+                except NoSuchElementException: 
+                    formats = driver.find_element_by_css_selector("ul#mediaTabs_tabSet")
 
-                label_text = label.text.replace(":","").strip() 
+                selected = formats.find_element_by_css_selector(".selected")
 
-                parent = label.find_element_by_xpath("..") # xpath for parent
-                siblings = parent.find_elements_by_css_selector("*") # all children of parent
+                if selected.find_elements_by_css_selector('.audible_mm_title'):
+                    return True
+                else:
+                    return False
 
-                if label_text not in ["Customer Reviews", "Best Sellers Rank"]:
-                    assert len(siblings) == 2
-                    value = siblings[1] # First sibling is the label, second is the value
-                    values.append(value.text.replace(":","").strip())
 
-                else:               
 
-                    if label_text == "Best Sellers Rank":
+            def get_book_details(driver):
 
-                        value = {}
+                div = driver.find_element_by_css_selector("div#detailBullets_feature_div")
+                labels = div.find_elements_by_css_selector("span.a-text-bold")
+                
+                values = []
 
-                        # General ranking (if any):
-                        string = parent.text.split(":")[1]
-                        print(string)
-                        match = re.search("#([\d,]+) in (.*) \(.*", string)
-                        position = match.group(1).strip().replace(",", "")
-                        category = match.group(2).strip()
+                for label in labels:
 
-                        value[category] = position
+                    label_text = label.text.replace(":","").strip() 
 
-                        # Category specific rankings
-                        rankings = parent.find_elements_by_css_selector("li")
+                    parent = label.find_element_by_xpath("..") # xpath for parent
+                    siblings = parent.find_elements_by_css_selector("*") # all children of parent
 
-                        for ranking in rankings:
+                    if label_text not in ["Customer Reviews", "Best Sellers Rank"]:
+                        assert len(siblings) == 2
+                        value = siblings[1] # First sibling is the label, second is the value
+                        values.append(value.text.replace(":","").strip())
 
-                            match = re.search("#([\d,]+) in (.*)", ranking.text)
-                            position = match.group(1).strip()
+                    else:               
+
+                        if label_text == "Best Sellers Rank":
+
+                            value = {}
+
+                            # General ranking (if any):
+                            string = parent.text.split(":")[1]
+                            print(string)
+                            match = re.search("#([\d,]+) in (.*) \(.*", string)
+                            position = match.group(1).strip().replace(",", "")
                             category = match.group(2).strip()
 
                             value[category] = position
 
-                        values.append(value)
+                            # Category specific rankings
+                            rankings = parent.find_elements_by_css_selector("li")
 
-                    elif label_text == "Customer Reviews":
+                            for ranking in rankings:
 
+                                match = re.search("#([\d,]+) in (.*)", ranking.text)
+                                position = match.group(1).strip()
+                                category = match.group(2).strip()
+
+                                value[category] = position
+                                print(value)
+
+                            values.append(value)
+
+                        elif label_text == "Customer Reviews":
+
+                            value = {}
+
+                            average = parent.find_element_by_css_selector("#acrPopover").get_attribute("title")
+                            count = parent.find_element_by_css_selector("#acrCustomerReviewText").text
+
+                            value["average"] = average
+                            value["count"] = count
+
+                            values.append(value)
+      
+                labels = [label.text.replace(":","").strip() for label in labels]
+
+                return dict(zip(labels, values))
+
+
+            def get_audiobook_details(driver):
+                div = driver.find_element_by_css_selector("div#audibleProductDetails")
+                trs = div.find_elements_by_css_selector("tr")
+                
+                labels = []
+                values = []
+
+                for row in trs:
+
+                    # TO DO - get ranking positions
+                    label = row.find_element_by_css_selector("th")
+                    label_classes = label.get_attribute("class").split()
+
+                    if 'prodDetSectionEntry' in label_classes: # This means that the row is about the product rankings
+                        
                         value = {}
 
-                        average = parent.find_element_by_css_selector("#acrPopover").get_attribute("title")
-                        count = parent.find_element_by_css_selector("#acrCustomerReviewText").text
+                        rankings = row.find_element_by_css_selector("td")
+                        for ranking in rankings.find_elements_by_css_selector("span"):
+                                match = re.search("#([\d,]+) in (.*)", ranking.text)
+                                position = match.group(1).strip()
+                                category = match.group(2).strip()
 
-                        value["average"] = average
-                        value["count"] = count
+                                value[category] = position
 
                         values.append(value)
-  
-            labels = [label.text.replace(":","").strip() for label in labels]
 
-            return dict(zip(labels, values))
+
+                    else:
+                        value = row.find_element_by_css_selector("td").text
+
+
+                labels = [label.text for label in labels]
+                    
+                return dict(zip(labels, values))
+
+
+            if is_audiobook(driver):
+                return get_audiobook_details(driver)
+
+            else:
+                return get_book_details(driver)
+
 
         driver = self.driver
         
