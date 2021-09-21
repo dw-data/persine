@@ -57,6 +57,16 @@ class AmazonBridge(BaseBridge):
                 try { data['title'] = d.querySelector('.p13n-sc-truncated').innerText; } catch(err) {}
                 try { data['asin'] = JSON.parse(d.querySelector("div.p13n-asin").dataset['p13nAsinMetadata'])['asin'] } catch(err) {}
                 try { data['url'] = d.querySelector('a.a-link-normal')['href']; } catch(err) {}
+                
+                try { 
+                        let idRegExp =  new RegExp(".*/dp/([\\\w\\\d]+)/.*", "g");
+                        console.log(idRegExp);
+                        console.log(data["url"]);
+                        let match = idRegExp.exec(data["url"]);
+                        console.log(match);
+                        data['product_id'] = match[1];
+                } catch(err) {}
+
                 try { data['img'] = d.querySelector('img')['src']; } catch(err) {}
                 try { section.querySelector("h2 .sp_desktop_sponsored_label").remove() } catch(err) {}
                 try { section.querySelector("h2 a").remove() } catch(err) {}
