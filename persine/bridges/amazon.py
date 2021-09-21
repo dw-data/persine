@@ -14,6 +14,7 @@ class AmazonBridge(BaseBridge):
 
     def __init__(self, driver):
         self.driver = driver
+        driver.set_script_timeout(100)
 
     def __scrape_search_results(self):
         return self.driver.execute_script(
@@ -89,7 +90,7 @@ class AmazonBridge(BaseBridge):
             }
 
             async function getContentsOfCarousel(root, previousFirst, step=0) {
-                if(step > 10) {
+                if(step > 20) {
                     return Promise.resolve([])
                 }
                 if(!root.offsetParent) {
@@ -119,7 +120,6 @@ class AmazonBridge(BaseBridge):
                             } 
                             else {
                                 console.log("working");
-                                tries += 1;
                             }
                         }, 200);
                     } else {
@@ -297,7 +297,6 @@ class AmazonBridge(BaseBridge):
 
                             # General ranking (if any):
                             string = parent.text.split(":")[1]
-                            print(string)
                             match = re.search("#([\d,]+) in (.*) \(.*", string)
                             position = match.group(1).strip().replace(",", "")
                             category = match.group(2).strip()
@@ -314,7 +313,6 @@ class AmazonBridge(BaseBridge):
                                 category = match.group(2).strip()
 
                                 value[category] = position
-                                print(value)
 
                             values.append(value)
 
